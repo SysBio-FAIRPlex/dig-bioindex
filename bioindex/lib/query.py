@@ -16,7 +16,7 @@ def fetch(config, engine, index, q, restricted=None):
     if len(q) != index.schema.arity:
         raise ValueError(f'Arity mismatch for index schema "{index.schema}"')
 
-    # execute the query and fetch the records from s3
+    # execute the query and fetch the records from gcs
     return _run_query(config, engine, index, q, restricted)
 
 
@@ -37,18 +37,18 @@ def fetch_multi(executor, config, engine, index, queries, restricted=None):
 
 def fetch_all(config, index, restricted=None, key_limit=None):
     """
-    Scans for all the S3 files in the schema and creates a dummy cursor
+    Scans for all the gcs files in the schema and creates a dummy cursor
     to read all the records from all the files. Returns a RecordReader
     of the results.
     """
-    s3_objects = list_objects(config.s3_bucket, index.s3_prefix, max_keys=key_limit)
+    gcs_objects = list_objects(config.gcs_bucket, index.gcs_prefix, max_keys=key_limit)
 
     # arbitrarily limit the number of keys
     if key_limit:
-        s3_objects = [o[1] for o in zip(range(key_limit), s3_objects)]
+        gcs_objects = [o[1] for o in zip(range(key_limit), gcs_objects)]
 
     # create a RecordSource for each object
-    sources = [RecordSource.from_s3_object(obj) for obj in s3_objects]
+    sources = [RecordSource.from_gcs_object(obj) for obj in gcs_objects]
 
     # create the reader object, begin reading the records
     return RecordReader(config, sources, index, restricted=restricted)
@@ -147,7 +147,7 @@ def match(config, engine, index, q):
 
 def _run_query(config, engine, index, q, restricted):
     """
-    Construct a SQL query to fetch S3 objects and byte offsets. Run it and
+    Construct a SQL query to fetch gcs objects and byte offsets. Run it and
     return a RecordReader to the results.
     """
     record_filter = None

@@ -1,24 +1,82 @@
-import gzip
 from io import BytesIO
+import gzip
+import os
+import re
+import fnmatch
 
-def list_objects(bucket, prefix, only=None, exclude=None, max_keys=None):
+from .gcp import gcs_client
+
+def list_objects(bucket_name, prefix, only=None, exclude=None, max_keys=None):
     """
-    Generator function that returns all the objects in S3 with a given prefix.
-    If the prefix is an absolute path (beginning with "s3://" then the bucket
+    Generator function that returns all the objects in GCS with a given prefix.
+    If the prefix is an absolute path (beginning with "gs://" then the bucket
     of the URI is used instead.
     """
-    for obj in []:
-        yield obj
+    # Get the GCS bucket
+    bucket = gcs_client.get_bucket(bucket_name)
+    
+    # Set up options for listing blobs
+    blobs = bucket.list_blobs(prefix=prefix.strip('/') + '/')
+    count = 0
 
+    for blob in blobs:
+        if max_keys and count >= max_keys:
+            break
+
+        path = blob.name
+        file = os.path.basename(path)
+
+        # Ignore empty files
+        if blob.size == 0:
+            continue
+
+        # Apply `only` and `exclude` filters
+        if only and not fnmatch.fnmatch(file, only):
+            continue
+        if exclude and fnmatch.fnmatch(file, exclude):
+            continue
+
+        # Yield blob metadata
+        yield {
+            'Key': blob.name,
+            'Size': blob.size,
+            'LastModified': blob.updated,
+            'ETag': blob.etag
+        }
+
+        count += 1
+
+
+def read_object(bucket_name, path, offset=None, length=None):
+    """
+    Open a gcs object and return a streaming portion of it. If the path is
+    an "absolute" path (begins with "gs://") then the bucket name is overridden
+    and the bucket from the path is used.
+    """
+    # Access the bucket and blob (object) in GCS
+    bucket = gcs_client.bucket(bucket_name)
+    blob = bucket.blob(path)
+
+    # Specify the range for reading
+    if offset is not None or length is not None:
+        # Fetch bytes as specified by offset and length
+        end = offset + length - 1 if offset is not None and length is not None else None
+        data = blob.download_as_bytes(start=offset, end=end)
+    else:
+        # Fetch the entire object
+        data = blob.download_as_bytes()
+
+    return data
 
 def read_lined_object(bucket, path, offset=None, length=None):
     raw = read_object(bucket, path, offset, length)
     if path.endswith('.gz'):
-        bytestream = BytesIO(raw.read())
+        bytestream = BytesIO(raw)
         gzip_file = gzip.open(bytestream, 'rt')
         return (line.rstrip("\n") for line in gzip_file)  # This is a generator expression, not a tuple.
     else:
-        return (line.decode('utf-8').rstrip("\n") for line in raw.iter_lines())
+        #return (line.decode('utf-8').rstrip("\n") for line in raw.iter_lines())
+        return (line.rstrip("\n") for line in raw.decode('utf-8').splitlines())
 
 
 def relative_key(key, common_prefix, strip_uuid=True):

@@ -1,9 +1,12 @@
 from google.auth import default
 from googleapiclient.discovery import build
+from google.cloud import storage
 
 import sqlalchemy.engine
 
 PROJECT_ID = 'aaa-willyn-test'
+
+gcs_client = storage.Client()
 
 # Initialize the Cloud SQL Admin client using default credentials
 def get_sqladmin_client():
@@ -33,10 +36,12 @@ def describe_cloudsql_instance(instance_name):
 
 
 def start_batch_job(index_name: str, s3_path: str, job_definition: str, additional_parameters: dict = None):
+    raise NotImplementedError("start_batch_job still todo")
     return ""
 
 
 def get_bgzip_job_status(job_id: str):
+    raise NotImplementedError("get_bgzip_job_status still todo")
     return None
 
 
@@ -44,11 +49,13 @@ def invoke_lambda(function_name, payload):
     """
     Invokes an AWS lambda function and waits for it to complete.
     """
+    raise NotImplementedError("invoke_lambda still todo")
     return ''
 
 
 def start_and_wait_for_indexer_job(file: str, index: str, arity: int, bucket: str, rds_secret: str, rds_schema: str,
                                    size: int):
+    raise NotImplementedError("start_and_wait_for_indexer_job still todo")
     return {}
 
 
@@ -61,6 +68,7 @@ def connect_to_db(schema=None, **kwargs):
 
     # build the connection uri
     #uri = '{engine}+pymysql://{username}:{password}@{host}/{schema}?local_infile=1'.format(schema=schema, **kwargs)
+    # Using a CloudSQL proxy for now.
     uri = 'mysql+pymysql://{username}:{password}@127.0.0.1:3306/{schema}?local_infile=1'.format(schema=schema, **kwargs)
 
     # create the connection pool

@@ -16,7 +16,7 @@ from .gcs import read_lined_object
 @dataclasses.dataclass(frozen=True)
 class RecordSource:
     """
-    A RecordSource is a portion of an S3 object that contains JSON-
+    A RecordSource is a portion of an GCS object that contains JSON-
     lines records.
     """
     key: str
@@ -24,14 +24,14 @@ class RecordSource:
     end: int
 
     @staticmethod
-    def from_s3_object(s3_obj):
+    def from_gcs_object(gcs_obj):
         """
-        Create a RecordSource from an S3 object listing.
+        Create a RecordSource from an GCS object listing.
         """
         return RecordSource(
-            key=s3_obj['Key'],
+            key=gcs_obj['Key'],
             start=0,
-            end=s3_obj['Size'],
+            end=gcs_obj['Size'],
         )
 
     @property
@@ -45,7 +45,7 @@ class RecordSource:
 class RecordReader:
     """
     A RecordReader is an iterator that reads all the JSON-lines (records)
-    from a list of RecordSource objects for a given S3 bucket.
+    from a list of RecordSource objects for a given GCS bucket.
     """
 
     def __init__(self, config, sources, index, record_filter=None, restricted=None):
@@ -76,7 +76,7 @@ class RecordReader:
 
     def _readall(self):
         """
-        A generator that reads each of the records from S3 for the sources.
+        A generator that reads each of the records from GCS for the sources.
         """
         for source in self.sources:
 
@@ -93,7 +93,7 @@ class RecordReader:
                 compression_on = self.index.compressed
                 if compression_on:
                     command = ['bgzip', '-b', f"{source.start}", '-s', f"{source.end - source.start}",
-                               f"s3://{self.config.s3_bucket}/{source.key}{'' if source.key.endswith('.gz') else '.gz'}"]
+                               f"gcs://{self.config.gcs_bucket}/{source.key}{'' if source.key.endswith('.gz') else '.gz'}"]
                     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1) as proc:
                         for line in proc.stdout:
                             self.bytes_read += len(line) + 1  # eol character
@@ -116,7 +116,7 @@ class RecordReader:
                             raise subprocess.CalledProcessError(proc.returncode, command, output=stderr)
 
                 else:
-                    content = read_lined_object(self.config.s3_bucket, source.key, offset=source.start,
+                    content = read_lined_object(self.config.gcs_bucket, source.key, offset=source.start,
                                           length=source.end - source.start)
 
                     # handle a bad case where the content failed to be read
@@ -139,7 +139,7 @@ class RecordReader:
                             self.count += 1
                             yield record
 
-            # handle database out of sync with S3
+            # handle database out of sync with GCS
             except botocore.exceptions.ClientError:
                 logging.error('Failed to read key %s; some records missing', source.key)
             except FileNotFoundError:

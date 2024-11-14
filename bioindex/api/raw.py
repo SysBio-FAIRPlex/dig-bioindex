@@ -5,7 +5,7 @@ import fastapi
 from .utils import *
 
 from ..lib import config
-from ..lib import s3
+from ..lib import gcs
 from ..lib.auth import verify_permissions
 
 
@@ -27,8 +27,8 @@ async def api_raw_plot_dataset(dataset: str, file: str, req: fastapi.Request):
     if not verify_permissions(portal, req, dataset=dataset):
         raise fastapi.HTTPException(status_code=401)
 
-    # load the object from s3
-    content = s3.read_object(CONFIG.s3_bucket, f'plot/dataset/{dataset}/{file}')
+    # load the object from gcs
+    content = gcs.read_object(CONFIG.gcs_bucket, f'plot/dataset/{dataset}/{file}')
     if content is None:
         raise fastapi.HTTPException(status_code=404)
 
@@ -43,8 +43,8 @@ async def api_raw_plot_phenotype(phenotype: str, file: str, req: fastapi.Request
     if not verify_permissions(portal, req, phenotype=phenotype):
         raise fastapi.HTTPException(status_code=401)
 
-    # load the object from s3
-    content = s3.read_object(CONFIG.s3_bucket, f'plot/phenotype/{phenotype}/{file}')
+    # load the object from gcs
+    content = gcs.read_object(CONFIG.gcs_bucket, f'plot/phenotype/{phenotype}/{file}')
     if content is None:
         raise fastapi.HTTPException(status_code=404)
 
@@ -59,8 +59,8 @@ async def api_raw_plot_phenotype_ancestry(phenotype: str, ancestry: str, file: s
     if not verify_permissions(portal, req, phenotype=phenotype):
         raise fastapi.HTTPException(status_code=401)
 
-    # load the object from s3
-    content = s3.read_object(CONFIG.s3_bucket, f'plot/phenotype/{phenotype}/{ancestry}/{file}')
+    # load the object from gcs
+    content = gcs.read_object(CONFIG.gcs_bucket, f'plot/phenotype/{phenotype}/{ancestry}/{file}')
     if content is None:
         raise fastapi.HTTPException(status_code=404)
 
@@ -69,7 +69,7 @@ async def api_raw_plot_phenotype_ancestry(phenotype: str, ancestry: str, file: s
 
 @router.get('/file/{file:path}')
 async def api_raw_file(file: str, req: fastapi.Request):
-    content = s3.read_object(CONFIG.s3_bucket, f'raw/{file}')
+    content = gcs.read_object(CONFIG.gcs_bucket, f'raw/{file}')
     if content is None:
         raise fastapi.HTTPException(status_code=404)
     content_type, encoding = mimetypes.guess_type(file)
