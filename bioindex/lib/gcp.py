@@ -72,6 +72,37 @@ def connect_to_db(schema=None, **kwargs):
         return engine
 
 
+def get_project_id() -> str:
+    """
+    Retrieve project id from environment or metadata server.
+    """
+    # In python 3.7, this works for App Engine
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+
+    if not project_id:
+        # In python 3.7, this works for Cloud Run
+        project_id = os.getenv("GCP_PROJECT")
+
+    if not project_id:  # > python37, use Metdata Server
+        # Only works on runtime.
+        import urllib.request
+
+        url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
+        req = urllib.request.Request(url)
+        req.add_header("Metadata-Flavor", "Google")
+        project_id = urllib.request.urlopen(req).read().decode()
+
+    if not project_id:  # Running locally
+        with open(os.environ["GOOGLE_APPLICATION_CREDENTIALS"], "r") as fp:
+            credentials = json.load(fp)
+        project_id = credentials["project_id"]
+
+    if not project_id:
+        raise ValueError("Could not get a value for PROJECT_ID")
+
+    return project_id
+
+
 def access_secret(secret_id: str) -> str:
     """
     Access secret value in Secret Manager.
