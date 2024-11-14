@@ -1,5 +1,6 @@
 from google.auth import default
 from googleapiclient.discovery import build
+from google.cloud import secretmanager
 
 import sqlalchemy.engine
 
@@ -69,3 +70,28 @@ def connect_to_db(schema=None, **kwargs):
     # test the engine by making a single connection
     with engine.connect():
         return engine
+
+
+def access_secret(secret_id: str) -> str:
+    """
+    Access secret value in Secret Manager.
+    Example secret_id: dig-bioindex/versions/1
+    """
+    PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT',None)
+    PROJECT_PREFIX = f'projects/{PROJECT_ID}/secrets/'
+
+    # Create the Secret Manager client.
+    try:
+        client = secretmanager.SecretManagerServiceClient()
+    except:
+        print('Did not create SecretManagerClient')
+
+    # Access the secret version.
+    response = client.access_secret_version(
+        request={'name': PROJECT_PREFIX+secret_id})
+
+    # WARNING: Do not print the secret in a production environment - this
+    # snippet is showing how to access the secret material.
+    payload = response.payload.data.decode('UTF-8')
+    # print("Plaintext: {}".format(payload))
+    return payload
