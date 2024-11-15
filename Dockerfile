@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.8-slim as build
+FROM --platform=linux/amd64 python:3.12-slim as build
 
 RUN apt-get update && \
     apt-get install -y default-libmysqlclient-dev pkg-config build-essential
@@ -10,4 +10,4 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install mysqlclient
 
-ENTRYPOINT bioindex serve
+ENTRYPOINT gunicorn bioindex.server:app --workers 8 -k uvicorn.workers.UvicornWorker --timeout 0
