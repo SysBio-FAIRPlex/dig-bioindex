@@ -2,7 +2,7 @@ steps:
   - name: 'bash'
     script: |
       #!/usr/bin/env bash
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+      sudo apt install curl && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   - name: python
     entrypoint: python
     args: ["-m", "pip", "install", "--user", "--upgrade", "pip"]     
