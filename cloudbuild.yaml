@@ -1,10 +1,12 @@
 steps:
-    - name: python
-      entrypoint: python
-      args: ["-m", "pip", "install", "--user", "--upgrade", "pip"]     
-    - name: python
-      entrypoint: pip
-      args: ["install", "-r", "requirements.txt", "--user"]
-    - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-      entrypoint: 'bash'
-      args: ['-c', 'gcloud config set app/cloud_build_timeout 2400 && gcloud run deploy app.yaml']
+  - name: python
+    entrypoint: python
+    args: ["-m", "pip", "install", "--user", "--upgrade", "pip"]     
+  - name: python
+    entrypoint: pip
+    args: ["install", "-r", "requirements.txt", "--user"]
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args: ['-c', 'gcloud config set app/cloud_build_timeout 2400 && gcloud run deploy app.yaml']
+  options:
+    logging: CLOUD_LOGGING_ONLY
