@@ -1,0 +1,26 @@
+runtime: python312
+service: dig-bioindex-dev
+
+env_variables:
+  APP_ENV: 'dev'
+
+instance_class: F4
+
+entrypoint: gunicorn -b :$PORT bioindex.server:app --workers 8 -k uvicorn.workers.UvicornWorker --timeout 0
+
+
+handlers:
+- url: /(.*\.(gif|png|jpg))$
+  static_files: static/\1
+  upload: static/.*\.(gif|png|jpg)$
+  http_headers:
+    Access-Control-Allow-Origin: '*'
+
+- url: /.*
+  secure: always
+  redirect_http_response_code: 301
+  script: auto
+
+
+automatic_scaling:
+  min_instances: 1
