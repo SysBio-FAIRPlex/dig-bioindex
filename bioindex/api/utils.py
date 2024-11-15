@@ -1,6 +1,6 @@
 import types
 
-from ..lib import aws
+from ..lib import gcp
 
 
 def monkey_patch_router(router):
@@ -18,7 +18,7 @@ def connect_to_bio(config):
     """
     Connect to the index schema.
     """
-    return aws.connect_to_db(**config.rds_config, schema=config.bio_schema)
+    return gcp.connect_to_db(**config.cloudsql_config, schema=config.bio_schema)
 
 
 def connect_to_portal(config):
@@ -26,4 +26,4 @@ def connect_to_portal(config):
     The portal/metadata schema is completely optional.
     """
     if config.portal_schema:
-        return aws.connect_to_db(**config.rds_config, schema=config.portal_schema)
+        return gcp.connect_to_db(**config.cloudsql_config, schema=config.portal_schema)
