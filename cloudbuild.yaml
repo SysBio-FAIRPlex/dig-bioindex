@@ -16,6 +16,8 @@
     - 'gcr.io/$PROJECT_ID/dig-bioindex:$COMMIT_SHA'
     - '--region'
     - 'us-central1'
+    - 'bioindex'
+    - 'serve'
     secretEnv: ['DB_USERNAME', 'DB_PASSWORD']
   availableSecrets:
     secretManager:
