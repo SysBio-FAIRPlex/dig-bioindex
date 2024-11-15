@@ -10,4 +10,4 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install mysqlclient
 
-ENTRYPOINT gunicorn bioindex.server:app --workers 8 -k uvicorn.workers.UvicornWorker --timeout 0
+ENTRYPOINT gunicorn bioindex.server:app --workers 1 -k uvicorn.workers.UvicornWorker --timeout 0
