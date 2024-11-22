@@ -198,6 +198,8 @@ def _run_query(config, engine, index, q, restricted):
     with engine.connect() as conn:
         if isinstance(query_params, list):
             query_params = dict(zip(escaped_column_names, query_params))
+        print(sql)
+        print(query_params)
         cursor = conn.execute(text(sql), query_params)
         rows = cursor.fetchall()
 

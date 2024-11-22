@@ -283,6 +283,9 @@ def update_compressed_status(cfg, index_name, prefix, compressed):
 @click.pass_obj
 def cli_query(cfg, index_name, q):
     engine = migrate.migrate(cfg)
+    print("Willy")
+    print(engine)
+    print(q)
     i = index.Index.lookup(engine, index_name, len(q))
 
     # query the index
@@ -408,14 +411,15 @@ def main():
     pymysql.install_as_MySQLdb()
 
     # run
-    try:
-        cli()
-    except ValueError as ex:
-        logging.error(ex)
-    except RuntimeError as ex:
-        logging.error(ex)
-    except AssertionError as ex:
-        logging.error(ex)
+    cli()
+    # try:
+    #     cli()
+    # except ValueError as ex:
+    #     logging.error(ex)
+    # except RuntimeError as ex:
+    #     logging.error(ex)
+    # except AssertionError as ex:
+    #     logging.error(ex)
 
 
 if __name__ == '__main__':

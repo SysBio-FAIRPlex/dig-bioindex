@@ -4,7 +4,7 @@ from google.cloud import storage
 
 import sqlalchemy.engine
 
-PROJECT_ID = 'aaa-willyn-test'
+PROJECT_ID = 'broad-tools-development'
 
 gcs_client = storage.Client()
 
@@ -69,7 +69,12 @@ def connect_to_db(schema=None, **kwargs):
     # build the connection uri
     #uri = '{engine}+pymysql://{username}:{password}@{host}/{schema}?local_infile=1'.format(schema=schema, **kwargs)
     # Using a CloudSQL proxy for now.
-    uri = 'mysql+pymysql://{username}:{password}@127.0.0.1:3306/{schema}?local_infile=1'.format(schema=schema, **kwargs)
+    #uri = 'mysql+pymysql://{username}:{password}@127.0.0.1:3306/{schema}?local_infile=1'.format(schema=schema, **kwargs)
+    uri = 'mysql+pymysql://{username}:{password}@/{schema}?unix_socket=/cloudsql/{INSTANCE_CONNECTION_NAME}'.format(
+        schema=schema,
+        INSTANCE_CONNECTION_NAME='broad-tools-development:us-central1:dig-bioindex-dev',
+        **kwargs
+    )
 
     # create the connection pool
     engine = sqlalchemy.create_engine(uri, pool_recycle=3600)

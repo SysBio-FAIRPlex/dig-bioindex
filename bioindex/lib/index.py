@@ -97,7 +97,6 @@ class Index:
             'FROM `__Indexes` '
             'WHERE `name` = :name AND LENGTH(`schema`) - LENGTH(REPLACE(`schema`, \',\', \'\')) + 1 = :arity'
         )
-
         with engine.connect() as conn:
             # lookup the index
             row = conn.execute(text(sql), {'name': name, 'arity': arity}).fetchone()

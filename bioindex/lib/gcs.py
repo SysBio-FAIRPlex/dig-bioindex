@@ -75,8 +75,7 @@ def read_lined_object(bucket, path, offset=None, length=None):
         gzip_file = gzip.open(bytestream, 'rt')
         return (line.rstrip("\n") for line in gzip_file)  # This is a generator expression, not a tuple.
     else:
-        #return (line.decode('utf-8').rstrip("\n") for line in raw.iter_lines())
-        return (line.rstrip("\n") for line in raw.decode('utf-8').splitlines())
+        return (line.decode('utf-8').rstrip("\n") for line in raw.iter_lines())
 
 
 def relative_key(key, common_prefix, strip_uuid=True):
