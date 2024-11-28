@@ -13,7 +13,7 @@ import rich.logging
 import rich.table
 import uvicorn
 
-from .lib import config, aws
+from .lib import config, gcp
 from .lib import index
 from .lib import migrate
 from .lib import ql
@@ -78,16 +78,16 @@ def cli_serve(port):
 @click.command(name='create')
 @click.argument('index_name')
 @click.argument('rds_table_name')
-@click.argument('s3_prefix')
+@click.argument('gcs_prefix')
 @click.argument('index_schema')
 @click.confirmation_option(prompt='This will create/update an index; continue?')
 @click.pass_obj
-def cli_create(cfg, index_name, rds_table_name, s3_prefix, index_schema):
+def cli_create(cfg, index_name, rds_table_name, gcs_prefix, index_schema):
     engine = migrate.migrate(cfg)
 
     # parse the schema to ensure validity; create the index
     try:
-        index.Index.create(engine, index_name, rds_table_name, s3_prefix, index_schema)
+        index.Index.create(engine, index_name, rds_table_name, gcs_prefix, index_schema)
 
         # successfully completed
         logging.info('Done; build with `index %s`', index_name)
@@ -104,12 +104,12 @@ def cli_list(cfg):
     table = rich.table.Table(title='Indexes')
     table.add_column('Last Built')
     table.add_column('Index')
-    table.add_column('S3 Prefix')
+    table.add_column('GCS Prefix')
     table.add_column('Schema')
 
     for i in sorted(indexes, key=lambda i: i.name):
         built = f'[green]{i.built}[/]' if i.built else '[red]Not built[/]'
-        table.add_row(built, i.name, i.s3_prefix, str(i.schema))
+        table.add_row(built, i.name, i.gcs_prefix, str(i.schema))
 
     console.print(table)
 
@@ -208,7 +208,7 @@ def cli_bulk_compression_management(cfg, include, exclude, job_type):
             if (inclusion_list is None or i.name in inclusion_list) and (
                 exclusion_list is None or i.name not in exclusion_list):
                 futures.append(
-                    executor.submit(check_index_and_launch_job, cfg, i.name, i.s3_prefix, job_type))
+                    executor.submit(check_index_and_launch_job, cfg, i.name, i.gcs_prefix, job_type))
 
         # wait for all futures to complete
         for future in concurrent.futures.as_completed(futures):
@@ -235,25 +235,25 @@ def cli_remove_uncompressed_files(cfg, index_name, prefix):
 
 def is_index_prefix_valid(cfg, idx: str, prefix: str):
     engine = migrate.migrate(cfg)
-    selected_index = [i for i in index.Index.lookup_all(engine, idx) if i.s3_prefix == prefix]
+    selected_index = [i for i in index.Index.lookup_all(engine, idx) if i.gcs_prefix == prefix]
     return len(selected_index) == 1
 
 
 def check_index_and_launch_job(cfg, index_name, prefix, job_type, additional_parameters=None):
     if is_index_prefix_valid(cfg, index_name, prefix):
-        start_and_monitor_aws_batch_job(job_type, index_name, prefix, additional_parameters=additional_parameters)
+        start_and_monitor_gcp_batch_job(job_type, index_name, prefix, additional_parameters=additional_parameters)
     else:
         console.print(f'Could not find unique index with name {index_name} and prefix {prefix}, quitting')
 
 
-def start_and_monitor_aws_batch_job(job_type: BgzipJobType, index_name: str, s3_path: str,
+def start_and_monitor_gcp_batch_job(job_type: BgzipJobType, index_name: str, gcs_path: str,
                                     initial_wait: int = 90, check_interval: int = 30,
                                     additional_parameters: dict = None):
-    job_id = aws.start_batch_job(index_name, s3_path, job_type.value, additional_parameters=additional_parameters)
+    job_id = gcp.start_batch_job(index_name, gcs_path, job_type.value, additional_parameters=additional_parameters)
     console.print(f'{job_type} started with id {job_id}')
     time.sleep(initial_wait)
     while True:
-        status = aws.get_bgzip_job_status(job_id)
+        status = gcp.get_bgzip_job_status(job_id)
         console.print(f'{job_type} job, id: {job_id} status: {status}')
         if status == 'SUCCEEDED':
             console.print(f'{job_type} job {job_id} succeeded')
@@ -283,6 +283,9 @@ def update_compressed_status(cfg, index_name, prefix, compressed):
 @click.pass_obj
 def cli_query(cfg, index_name, q):
     engine = migrate.migrate(cfg)
+    print("Willy")
+    print(engine)
+    print(q)
     i = index.Index.lookup(engine, index_name, len(q))
 
     # query the index
@@ -408,14 +411,15 @@ def main():
     pymysql.install_as_MySQLdb()
 
     # run
-    try:
-        cli()
-    except ValueError as ex:
-        logging.error(ex)
-    except RuntimeError as ex:
-        logging.error(ex)
-    except AssertionError as ex:
-        logging.error(ex)
+    cli()
+    # try:
+    #     cli()
+    # except ValueError as ex:
+    #     logging.error(ex)
+    # except RuntimeError as ex:
+    #     logging.error(ex)
+    # except AssertionError as ex:
+    #     logging.error(ex)
 
 
 if __name__ == '__main__':

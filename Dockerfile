@@ -5,9 +5,16 @@ RUN apt-get update && \
 
 COPY requirements.txt .
 COPY bioindex ./bioindex
-COPY batch-index-files/index_files.py .
+COPY .bioindex ./.bioindex
+COPY web ./web
+COPY schema.graphql ./schema.graphql
+
+ENV GOOGLE_CLOUD_PROJECT=broad-tools-development
+
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install mysqlclient
 
+EXPOSE 5000
 
+# Command to run both cloud_sql_proxy and your app
+CMD ["python3", "-m", "bioindex.main", "serve"]

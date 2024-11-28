@@ -13,8 +13,8 @@ import time
 
 from sqlalchemy import text
 
-from .aws import invoke_lambda, start_and_wait_for_indexer_job
-from .s3 import list_objects, read_lined_object, relative_key
+from .gcp import invoke_lambda, start_and_wait_for_indexer_job
+from .gcs import list_objects, read_lined_object, relative_key
 from .schema import Schema
 from .utils import cap_case_str
 
@@ -24,7 +24,7 @@ class Index:
     An index definition that can be built or queried.
     """
 
-    def __init__(self, name, table_name, s3_prefix, schema_string, built_date, compressed):
+    def __init__(self, name, table_name, gcs_prefix, schema_string, built_date, compressed):
         """
         Initialize the index with everything needed to build keys and query.
         """
@@ -32,7 +32,7 @@ class Index:
         self.table = self.schema.table_def(table_name, sqlalchemy.MetaData())
         self.name = name
         self.built = built_date
-        self.s3_prefix = s3_prefix
+        self.gcs_prefix = gcs_prefix
         self.compressed = compressed
 
     @staticmethod
@@ -46,13 +46,13 @@ class Index:
             )
 
     @staticmethod
-    def create(engine, name, rds_table_name, s3_prefix, schema):
+    def create(engine, name, rds_table_name, gcs_prefix, schema):
         """
         Create a new record in the __Index table and return True if
         successful. Will overwrite any existing index with the same
         name.
         """
-        assert s3_prefix.endswith('/'), "S3 prefix must be a common prefix ending with '/'"
+        assert gcs_prefix.endswith('/'), "GCS prefix must be a common prefix ending with '/'"
 
         # add the new index to the table
         sql = (
@@ -66,7 +66,7 @@ class Index:
         )
 
         with engine.begin() as conn:
-            row = conn.execute(text(sql), {'name': name, 'table': rds_table_name, 'prefix': s3_prefix, 'schema': schema})
+            row = conn.execute(text(sql), {'name': name, 'table': rds_table_name, 'prefix': gcs_prefix, 'schema': schema})
             return row and row.lastrowid is not None
 
     @staticmethod
@@ -89,7 +89,7 @@ class Index:
     @staticmethod
     def lookup(engine, name, arity):
         """
-        Lookup an index in the database, return its table name, s3 prefix,
+        Lookup an index in the database, return its table name, gcs prefix,
         schema, etc.
         """
         sql = (
@@ -97,7 +97,6 @@ class Index:
             'FROM `__Indexes` '
             'WHERE `name` = :name AND LENGTH(`schema`) - LENGTH(REPLACE(`schema`, \',\', \'\')) + 1 = :arity'
         )
-
         with engine.connect() as conn:
             # lookup the index
             row = conn.execute(text(sql), {'name': name, 'arity': arity}).fetchone()
@@ -110,7 +109,7 @@ class Index:
     @staticmethod
     def lookup_all(engine, name):
         """
-        Lookup an index in the database, return its table name, s3 prefix,
+        Lookup an index in the database, return its table name, gcs prefix,
         schema, etc.
         """
         sql = (
@@ -142,18 +141,18 @@ class Index:
 
     def build(self, config, engine, use_lambda=False, use_batch=False, workers=3, console=None):
         """
-        Builds the index table for objects in S3.
+        Builds the index table for objects in GCS.
         """
-        logging.info('Finding keys in %s...', self.s3_prefix)
-        json_objects = list(list_objects(config.s3_bucket, self.s3_prefix, only='*.json'))
-        gz_objects = list(list_objects(config.s3_bucket, self.s3_prefix, only='*.json.gz'))
+        logging.info('Finding keys in %s...', self.gcs_prefix)
+        json_objects = list(list_objects(config.gcs_bucket, self.gcs_prefix, only='*.json'))
+        gz_objects = list(list_objects(config.gcs_bucket, self.gcs_prefix, only='*.json.gz'))
         if len(json_objects) > 0 and len(gz_objects) > 0:
-            raise ValueError(f'There are both compressed and uncompressed files in {self.s3_prefix}. '
+            raise ValueError(f'There are both compressed and uncompressed files in {self.gcs_prefix}. '
                              f'An index needs to be all one or the other.')
-        s3_objects = json_objects + gz_objects
+        gcs_objects = json_objects + gz_objects
 
         # delete all stale keys; get the list of objects left to index
-        objects = self.delete_stale_keys(engine, s3_objects, console=console)
+        objects = self.delete_stale_keys(engine, gcs_objects, console=console)
 
         # calculate the total size of all the objects
         total_size = functools.reduce(lambda a, b: a + b['Size'], objects, 0)
@@ -229,14 +228,14 @@ class Index:
         """
         logging.info('Finding stale keys...')
         db_keys = self.lookup_keys(engine)
-        # if a file in s3 is in the db but the version is different from what's in s3 we delete
+        # if a file in gcs is in the db but the version is different from what's in gcs we delete
         updated_files_for_db = [{'id': db_keys[o['Key']]['id'], 'key': o['Key']} for o in objects
                                 if o['Key'] in db_keys and db_keys[o['Key']]['version'] != o['ETag'].strip('"')[:32]]
         updated_files_for_return = [o for o in objects if o['Key'] in set([f['key'] for f in updated_files_for_db])]
-        s3_keys = set([o['Key'] for o in objects])
-        deleted_files = [{'id': db_keys[k]['id'], 'key': k} for k in db_keys if k not in s3_keys]
+        gcs_keys = set([o['Key'] for o in objects])
+        deleted_files = [{'id': db_keys[k]['id'], 'key': k} for k in db_keys if k not in gcs_keys]
         new_files = [o for o in objects if o['Key'] not in db_keys]
-        # if a file is in the db but not in s3 we delete
+        # if a file is in the db but not in gcs we delete
         updated_or_deleted_files = updated_files_for_db + deleted_files
 
         if updated_or_deleted_files:
@@ -262,16 +261,16 @@ class Index:
         return new_files + updated_files_for_return
 
     def batch_run_function(self, config, obj):
-        logging.info(f'Processing via batch {relative_key(obj["Key"], self.s3_prefix)}...')
+        logging.info(f'Processing via batch {relative_key(obj["Key"], self.gcs_prefix)}...')
 
-        return start_and_wait_for_indexer_job(obj['Key'], self.name, self.schema.arity, config.s3_bucket, config.rds_secret,
+        return start_and_wait_for_indexer_job(obj['Key'], self.name, self.schema.arity, config.gcs_bucket, config.rds_secret,
                                               config.bio_schema, obj['Size'])
         """
         Index the objects using a lambda function.
         """
 
     def lambda_run_function(self, config, obj):
-        logging.info(f'Processing {relative_key(obj["Key"], self.s3_prefix)}...')
+        logging.info(f'Processing {relative_key(obj["Key"], self.gcs_prefix)}...')
 
         # lambda function event data
         payload = {
@@ -279,8 +278,8 @@ class Index:
             'arity': self.schema.arity,
             'rds_secret': config.rds_secret,
             'rds_schema': config.bio_schema,
-            's3_bucket': config.s3_bucket,
-            's3_obj': obj,
+            'gcs_bucket': config.gcs_bucket,
+            'gcs_obj': obj,
         }
 
         # run the lambda asynchronously
@@ -320,9 +319,9 @@ class Index:
 
     def index_objects_local(self, config, engine, pool, objects, progress=None, overall=None):
         """
-        Index S3 objects locally.
+        Index GCS objects locally.
         """
-        jobs = [pool.submit(self.index_object, engine, config.s3_bucket, obj, progress, overall) for obj in objects]
+        jobs = [pool.submit(self.index_object, engine, config.gcs_bucket, obj, progress, overall) for obj in objects]
 
         # as each job finishes, insert the records into the table
         for job in concurrent.futures.as_completed(jobs):
@@ -340,18 +339,18 @@ class Index:
 
     def index_object(self, engine, bucket, obj, progress=None, overall=None):
         """
-        Read a file in S3, index it, and insert records into the table.
+        Read a file in GCS, index it, and insert records into the table.
         """
         key, version, size = obj['Key'], obj['ETag'].strip('"')[:32], obj['Size']
         key_id = self.insert_key(engine, key, version)
 
-        # read the file from s3
+        # read the file from gcs
         content = read_lined_object(bucket, key)
         start_offset = 0
         records = {}
 
         # per-file progress bar
-        rel_key = relative_key(key, self.s3_prefix)
+        rel_key = relative_key(key, self.gcs_prefix)
         file_progress = progress and progress.add_task(f'[yellow]{rel_key}[/]', total=size)
 
         # process each line (record)
@@ -504,7 +503,7 @@ class Index:
         """
         sql = 'SELECT `id`, `key`, `version`, `built` FROM `__Keys` WHERE `index` = :index AND `key` LIKE :prefix'
         with engine.begin() as conn:
-            rows = conn.execute(text(sql), {'index': self.name, 'prefix': f"{self.s3_prefix}%"}).fetchall()
+            rows = conn.execute(text(sql), {'index': self.name, 'prefix': f"{self.gcs_prefix}%"}).fetchall()
 
         return {key: {'id': id, 'version': built and ver} for id, key, ver, built in rows}
 
